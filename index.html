@@ -1,4 +1,4 @@
-html_code = <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
@@ -6,47 +6,13 @@ html_code = <!DOCTYPE html>
   <title>스마일 캡처 앱</title>
   <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <style>
-    body { 
-      text-align: center; 
-      background: #222; 
-      color: #fff; 
-      font-family: sans-serif; 
-      padding: 20px;
-    }
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    video, canvas { 
-      border: 2px solid #0b84ff;
-      border-radius: 10px; 
-      margin: 10px;
-      background: #000;
-    }
-    button { 
-      margin: 15px 10px; 
-      padding: 12px 24px; 
-      border: none; 
-      border-radius: 8px; 
-      background: #0b84ff; 
-      color: white; 
-      font-size: 16px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    button:hover {
-      background: #0066cc;
-    }
-    button:disabled {
-      background: #666;
-      cursor: not-allowed;
-    }
-    .status {
-      margin: 10px 0;
-      padding: 10px;
-      border-radius: 5px;
-      background: #333;
-    }
+    body { text-align: center; background: #222; color: #fff; font-family: sans-serif; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    video, canvas { border: 2px solid #0b84ff; border-radius: 10px; margin: 10px; background: #000; }
+    button { margin: 15px 10px; padding: 12px 24px; border: none; border-radius: 8px; background: #0b84ff; color: white; font-size: 16px; cursor: pointer; }
+    button:hover { background: #0066cc; }
+    button:disabled { background: #666; cursor: not-allowed; }
+    .status { margin: 10px 0; padding: 10px; border-radius: 5px; background: #333; }
     .success { background: #2d5a2d; }
     .error { background: #5a2d2d; }
     .warning { background: #5a552d; }
@@ -57,7 +23,7 @@ html_code = <!DOCTYPE html>
     <h2>🎭 스마일 캡처 앱</h2>
     <p>웃으면 자동으로 감지되어 사진을 저장할 수 있어요!</p>
     
-    <div id="status" class="status">카메라 접근 권한을 요청 중...</div>
+    <div id="status" class="status">로딩 중...</div>
     
     <div>
       <video id="video" width="400" height="300" autoplay muted playsinline></video>
@@ -84,13 +50,11 @@ html_code = <!DOCTYPE html>
     let isCameraActive = false;
     let detectionInterval;
 
-    // 상태 업데이트 함수
     function updateStatus(message, type = '') {
       statusDiv.textContent = message;
       statusDiv.className = `status ${type}`;
     }
 
-    // 얼굴 인식 모델 로드
     async function loadModels() {
       updateStatus('AI 모델 로드 중...', 'warning');
       try {
@@ -103,11 +67,9 @@ html_code = <!DOCTYPE html>
         startCameraBtn.disabled = false;
       } catch (error) {
         updateStatus('모델 로드 실패: ' + error.message, 'error');
-        console.error('Model loading error:', error);
       }
     }
 
-    // 카메라 시작 함수
     async function startCamera() {
       if (isCameraActive) return;
       
@@ -128,24 +90,13 @@ html_code = <!DOCTYPE html>
         startCameraBtn.disabled = true;
         captureBtn.disabled = false;
         updateStatus('카메라 연결 성공! 얼굴을 인식 중...', 'success');
-        
-        // 얼굴 감지 시작
         startFaceDetection();
         
       } catch (error) {
         updateStatus('카메라 접근 실패: ' + error.message, 'error');
-        console.error('Camera access error:', error);
-        
-        // 코랩 환경에서의 대체 메시지
-        if (error.name === 'NotAllowedError') {
-          updateStatus('카메라 접근이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.', 'error');
-        } else if (error.name === 'NotFoundError') {
-          updateStatus('사용 가능한 카메라를 찾을 수 없습니다.', 'error');
-        }
       }
     }
 
-    // 얼굴 감지 함수
     function startFaceDetection() {
       const displaySize = { width: video.width, height: video.height };
       faceapi.matchDimensions(overlay, displaySize);
@@ -162,15 +113,12 @@ html_code = <!DOCTYPE html>
           context.clearRect(0, 0, overlay.width, overlay.height);
           const resizedDetections = faceapi.resizeResults(detections, displaySize);
           
-          // 얼굴과 표정 그리기
           faceapi.draw.drawDetections(overlay, resizedDetections);
           faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
           faceapi.draw.drawFaceExpressions(overlay, resizedDetections);
           
-          // 감지 정보 표시
           updateDetectionInfo(detections);
           
-          // 미소 감지
           if (detections.length > 0) {
             const expressions = detections[0].expressions;
             const smileConfidence = expressions.happy;
@@ -190,7 +138,6 @@ html_code = <!DOCTYPE html>
       }, 300);
     }
 
-    // 감지 정보 업데이트
     function updateDetectionInfo(detections) {
       if (detections.length === 0) {
         detectionInfo.innerHTML = '<p>얼굴이 감지되지 않았습니다. 카메라 앞으로 이동해주세요.</p>';
@@ -204,13 +151,8 @@ html_code = <!DOCTYPE html>
       Object.entries(expressions).forEach(([emotion, confidence]) => {
         const percent = (confidence * 100).toFixed(1);
         const emoji = {
-          'happy': '😄',
-          'sad': '😢',
-          'angry': '😠',
-          'fearful': '😨',
-          'disgusted': '🤢',
-          'surprised': '😲',
-          'neutral': '😐'
+          'happy': '😄', 'sad': '😢', 'angry': '😠', 'fearful': '😨',
+          'disgusted': '🤢', 'surprised': '😲', 'neutral': '😐'
         }[emotion] || '❓';
         
         infoHTML += `
@@ -225,7 +167,6 @@ html_code = <!DOCTYPE html>
       detectionInfo.innerHTML = infoHTML;
     }
 
-    // 사진 캡처 함수
     function capturePhoto() {
       if (!isCameraActive) {
         alert('먼저 카메라를 시작해주세요!');
@@ -246,21 +187,12 @@ html_code = <!DOCTYPE html>
       }
     }
 
-    // 이벤트 리스너 설정
     startCameraBtn.addEventListener('click', startCamera);
     captureBtn.addEventListener('click', capturePhoto);
-
-    // 페이지 로드 시 모델 로드 시작
     window.addEventListener('load', loadModels);
-
-    // 페이지 언로드 시 정리
     window.addEventListener('beforeunload', () => {
-      if (detectionInterval) {
-        clearInterval(detectionInterval);
-      }
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach(track => track.stop());
-      }
+      if (detectionInterval) clearInterval(detectionInterval);
+      if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
     });
   </script>
 </body>
