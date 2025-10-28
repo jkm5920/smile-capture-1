@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스마일 감지 카메라</title>
+    <title>스마일 감지 카메라 - GitHub Pages</title>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -37,6 +38,15 @@
             opacity: 0.9;
         }
         
+        .info-box {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #4ecdc4;
+        }
+        
         .camera-section {
             display: flex;
             flex-wrap: wrap;
@@ -61,7 +71,7 @@
         }
         
         .controls {
-            margin: 20px 0;
+            margin: 25px 0;
         }
         
         button {
@@ -89,81 +99,111 @@
         }
         
         .status {
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 25px auto;
             max-width: 600px;
             backdrop-filter: blur(10px);
+            border-left: 4px solid #ffd700;
         }
         
-        .error {
-            background: rgba(255, 87, 87, 0.2);
-            border: 1px solid rgba(255, 87, 87, 0.5);
+        .status.success {
+            border-left-color: #4caf50;
+            background: rgba(76, 175, 80, 0.1);
         }
         
-        .success {
-            background: rgba(76, 175, 80, 0.2);
-            border: 1px solid rgba(76, 175, 80, 0.5);
-        }
-        
-        .warning {
-            background: rgba(255, 193, 7, 0.2);
-            border: 1px solid rgba(255, 193, 7, 0.5);
+        .status.error {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
         }
         
         .expressions {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 10px;
-            margin-top: 20px;
+            gap: 15px;
+            margin-top: 25px;
             max-width: 800px;
             margin-left: auto;
             margin-right: auto;
         }
         
         .expression {
-            background: rgba(255,255,255,0.1);
-            padding: 10px;
-            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 15px;
+            border-radius: 10px;
             backdrop-filter: blur(5px);
         }
         
         .expression-value {
-            height: 8px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 4px;
-            margin-top: 5px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            margin-top: 8px;
             overflow: hidden;
         }
         
         .expression-fill {
             height: 100%;
-            background: #4ecdc4;
-            border-radius: 4px;
+            background: linear-gradient(90deg, #4ecdc4, #44a08d);
+            border-radius: 5px;
             transition: width 0.3s ease;
         }
         
-        .smile-detected {
+        .smile-indicator {
+            font-size: 3rem;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .smile-active {
             animation: pulse 1s infinite;
+            transform: scale(1.2);
         }
         
         @keyframes pulse {
-            0% { background: #ff6b6b; }
-            50% { background: #ff5252; }
-            100% { background: #ff6b6b; }
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        .photo-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .photo-gallery img {
+            width: 100px;
+            height: 75px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #4ecdc4;
+            transition: transform 0.3s ease;
+        }
+        
+        .photo-gallery img:hover {
+            transform: scale(1.1);
         }
         
         @media (max-width: 768px) {
+            .camera-section {
+                flex-direction: column;
+                align-items: center;
+            }
+            
             video, canvas {
                 width: 100%;
                 max-width: 400px;
                 height: 300px;
             }
             
-            .camera-section {
-                flex-direction: column;
-                align-items: center;
+            button {
+                padding: 12px 20px;
+                font-size: 1rem;
+                margin: 5px;
             }
         }
     </style>
@@ -173,32 +213,49 @@
         <h1>😊 스마일 감지 카메라</h1>
         <p class="subtitle">웃음을 감지하면 자동으로 하이라이트!</p>
         
+        <div class="info-box">
+            <h3>📋 사용 방법</h3>
+            <ol style="text-align: left; margin: 15px 0; padding-left: 20px;">
+                <li>"카메라 시작" 버튼을 클릭하세요</li>
+                <li>카메라 접근 권한을 허용해주세요</li>
+                <li>웃으면 자동으로 감지됩니다!</li>
+                <li>"사진 저장"으로 캡처하세요</li>
+            </ol>
+            <p><strong>⚠️ 주의:</strong> HTTPS 환경에서만 카메라 접근이 가능합니다 (GitHub Pages는 자동 HTTPS)</p>
+        </div>
+        
         <div class="camera-section">
             <div class="video-container">
                 <video id="video" width="400" height="300" autoplay muted playsinline></video>
+                <div style="padding: 10px; background: rgba(0,0,0,0.7);">실시간 카메라</div>
             </div>
             <div class="canvas-container">
                 <canvas id="overlay" width="400" height="300"></canvas>
+                <div style="padding: 10px; background: rgba(0,0,0,0.7);">AI 분석 결과</div>
             </div>
         </div>
+        
+        <div class="smile-indicator" id="smileIndicator">😐</div>
         
         <div class="controls">
             <button id="startCamera">📷 카메라 시작</button>
             <button id="capture" disabled>📸 사진 저장</button>
+            <button id="toggleCamera" disabled>🔄 카메라 전환</button>
         </div>
         
-        <div class="status warning" id="status">
+        <div class="status" id="status">
             애플리케이션 초기화 중...
         </div>
         
         <div class="expressions" id="expressions">
-            <!-- 표현식 정보가 여기에 동적으로 추가됨 -->
+            <!-- 감지된 표정 정보가 여기에 표시됩니다 -->
+        </div>
+        
+        <div class="photo-gallery" id="photoGallery">
+            <!-- 저장된 사진들이 여기에 표시됩니다 -->
         </div>
     </div>
 
-    <!-- FaceAPI.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-    
     <script>
         // 요소 선택
         const video = document.getElementById('video');
@@ -206,13 +263,18 @@
         const context = overlay.getContext('2d');
         const statusDiv = document.getElementById('status');
         const expressionsDiv = document.getElementById('expressions');
+        const smileIndicator = document.getElementById('smileIndicator');
+        const photoGallery = document.getElementById('photoGallery');
         const startCameraBtn = document.getElementById('startCamera');
         const captureBtn = document.getElementById('capture');
+        const toggleCameraBtn = document.getElementById('toggleCamera');
 
         // 상태 변수
         let isCameraActive = false;
         let detectionInterval;
         let modelsLoaded = false;
+        let currentFacingMode = 'user';
+        let photoCount = 0;
 
         // 상태 업데이트 함수
         function updateStatus(message, type = '') {
@@ -223,55 +285,22 @@
 
         // 얼굴 인식 모델 로드
         async function loadModels() {
-            updateStatus('AI 얼굴 인식 모델을 로드하는 중...', 'warning');
+            updateStatus('AI 얼굴 인식 모델을 로드하는 중...');
             
             try {
-                // FaceAPI 사용 가능 여부 확인
-                if (typeof faceapi === 'undefined') {
-                    throw new Error('FaceAPI.js를 로드할 수 없습니다. 인터넷 연결을 확인해주세요.');
-                }
-
-                // 여러 CDN 시도 (fallback)
-                const weightsBasePaths = [
-                    'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/',
-                    'https://unpkg.com/face-api.js@0.22.2/weights/'
-                ];
-
-                let modelsLoaded = false;
-                let lastError = null;
-
-                for (const basePath of weightsBasePaths) {
-                    try {
-                        updateStatus(`모델 로드 시도: ${basePath}`, 'warning');
-                        
-                        await Promise.all([
-                            faceapi.nets.tinyFaceDetector.loadFromUri(basePath),
-                            faceapi.nets.faceLandmark68Net.loadFromUri(basePath),
-                            faceapi.nets.faceRecognitionNet.loadFromUri(basePath),
-                            faceapi.nets.faceExpressionNet.loadFromUri(basePath)
-                        ]);
-                        
-                        modelsLoaded = true;
-                        break;
-                        
-                    } catch (error) {
-                        lastError = error;
-                        console.warn(`CDN 실패: ${basePath}`, error);
-                        continue;
-                    }
-                }
-
-                if (!modelsLoaded) {
-                    throw lastError || new Error('모든 CDN에서 모델을 로드하지 못했습니다.');
-                }
-
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
+                    faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
+                    faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/')
+                ]);
+                
                 modelsLoaded = true;
-                updateStatus('모델 로드 완료! 카메라를 시작해주세요.', 'success');
+                updateStatus('✅ 모델 로드 성공! 이제 카메라를 시작할 수 있습니다.', 'success');
                 startCameraBtn.disabled = false;
                 
             } catch (error) {
                 console.error('모델 로드 오류:', error);
-                updateStatus(`모델 로드 실패: ${error.message}. 페이지를 새로고침 해주세요.`, 'error');
+                updateStatus('❌ 모델 로드 실패: ' + error.message + ' 페이지를 새로고침 해주세요.', 'error');
             }
         }
 
@@ -279,24 +308,28 @@
         async function startCamera() {
             if (isCameraActive || !modelsLoaded) return;
             
-            updateStatus('카메라 접근 권한 요청 중...', 'warning');
+            updateStatus('카메라 접근 권한 요청 중...');
             
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         width: { ideal: 400 },
                         height: { ideal: 300 },
-                        facingMode: 'user'
+                        facingMode: currentFacingMode
                     }, 
                     audio: false 
                 });
                 
                 video.srcObject = stream;
                 isCameraActive = true;
-                startCameraBtn.disabled = true;
-                captureBtn.disabled = false;
                 
-                updateStatus('카메라 연결 성공! 얼굴을 인식 중...', 'success');
+                // 버튼 상태 업데이트
+                startCameraBtn.disabled = true;
+                startCameraBtn.textContent = '📷 카메라 실행 중';
+                captureBtn.disabled = false;
+                toggleCameraBtn.disabled = false;
+                
+                updateStatus('✅ 카메라 연결 성공! 이제 얼굴을 인식합니다...', 'success');
                 
                 // 얼굴 감지 시작
                 startFaceDetection();
@@ -306,14 +339,46 @@
                 let errorMessage = '카메라 접근 실패: ';
                 
                 if (error.name === 'NotAllowedError') {
-                    errorMessage += '카메라 권한이 거부되었습니다.';
+                    errorMessage = '❌ 카메라 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.';
                 } else if (error.name === 'NotFoundError') {
-                    errorMessage += '카메라를 찾을 수 없습니다.';
+                    errorMessage = '❌ 카메라를 찾을 수 없습니다.';
                 } else {
                     errorMessage += error.message;
                 }
                 
                 updateStatus(errorMessage, 'error');
+                startCameraBtn.disabled = false;
+            }
+        }
+
+        // 카메라 전환 함수
+        async function toggleCamera() {
+            if (!isCameraActive) return;
+            
+            try {
+                // 현재 스트림 정지
+                video.srcObject.getTracks().forEach(track => track.stop());
+                
+                // 카메라 전환
+                currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+                
+                updateStatus('카메라 전환 중...');
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 400 },
+                        height: { ideal: 300 },
+                        facingMode: currentFacingMode
+                    }, 
+                    audio: false 
+                });
+                
+                video.srcObject = stream;
+                updateStatus('✅ 카메라 전환 완료!', 'success');
+                
+            } catch (error) {
+                console.error('카메라 전환 오류:', error);
+                updateStatus('❌ 카메라 전환에 실패했습니다.', 'error');
             }
         }
 
@@ -346,15 +411,15 @@
                 } catch (error) {
                     console.error('얼굴 감지 오류:', error);
                 }
-            }, 100);
+            }, 150);
         }
 
         // 표현식 정보 업데이트
         function updateExpressionsInfo(detections) {
             if (detections.length === 0) {
-                expressionsDiv.innerHTML = '<div class="expression">얼굴이 감지되지 않았습니다</div>';
-                captureBtn.classList.remove('smile-detected');
-                captureBtn.textContent = '📸 사진 저장';
+                expressionsDiv.innerHTML = '<div class="expression">👤 얼굴이 감지되지 않았습니다. 카메라 앞으로 이동해주세요.</div>';
+                smileIndicator.textContent = '😐';
+                smileIndicator.classList.remove('smile-active');
                 return;
             }
             
@@ -373,11 +438,11 @@
                 
                 expressionsHTML += `
                     <div class="expression">
-                        <div>${emojis[emotion] || '❓'} ${emotion}</div>
+                        <div style="font-size: 1.1em; margin-bottom: 5px;">${emojis[emotion] || '❓'} ${emotion}</div>
                         <div class="expression-value">
                             <div class="expression-fill" style="width: ${percent}%"></div>
                         </div>
-                        <small>${percent}%</small>
+                        <div style="margin-top: 5px; font-weight: bold; font-size: 0.9em;">${percent}%</div>
                     </div>
                 `;
                 
@@ -389,13 +454,13 @@
             
             expressionsDiv.innerHTML = expressionsHTML;
             
-            // 미소 감지 시 버튼 하이라이트
+            // 미소 감지 시 하이라이트
             if (maxExpression.name === 'happy' && maxExpression.value > 0.7) {
-                captureBtn.classList.add('smile-detected');
-                captureBtn.textContent = '😄 웃는 얼굴 감지!';
+                smileIndicator.textContent = '😄';
+                smileIndicator.classList.add('smile-active');
             } else {
-                captureBtn.classList.remove('smile-detected');
-                captureBtn.textContent = '📸 사진 저장';
+                smileIndicator.textContent = '😐';
+                smileIndicator.classList.remove('smile-active');
             }
         }
 
@@ -407,22 +472,44 @@
             }
             
             try {
+                const imageData = overlay.toDataURL('image/png');
+                
+                // 다운로드
                 const link = document.createElement('a');
-                link.download = `smile-${Date.now()}.png`;
-                link.href = overlay.toDataURL('image/png');
+                link.download = `smile-capture-${++photoCount}.png`;
+                link.href = imageData;
                 link.click();
                 
-                updateStatus('사진이 저장되었습니다! 😊', 'success');
+                // 갤러리에 추가
+                addToGallery(imageData);
+                
+                updateStatus(`✅ 사진 ${photoCount}장 저장됨!`, 'success');
                 
             } catch (error) {
                 console.error('사진 저장 오류:', error);
-                updateStatus('사진 저장에 실패했습니다.', 'error');
+                updateStatus('❌ 사진 저장에 실패했습니다.', 'error');
             }
+        }
+
+        // 갤러리에 사진 추가
+        function addToGallery(imageData) {
+            const img = document.createElement('img');
+            img.src = imageData;
+            img.alt = `캡처된 사진 ${photoCount}`;
+            img.title = '클릭하면 원본 크기로 볼 수 있습니다';
+            
+            // 클릭하면 원본 보기
+            img.addEventListener('click', () => {
+                window.open(imageData, '_blank');
+            });
+            
+            photoGallery.appendChild(img);
         }
 
         // 이벤트 리스너 설정
         startCameraBtn.addEventListener('click', startCamera);
         captureBtn.addEventListener('click', capturePhoto);
+        toggleCameraBtn.addEventListener('click', toggleCamera);
 
         // 페이지 로드 시 모델 로드 시작
         window.addEventListener('load', loadModels);
@@ -436,6 +523,9 @@
                 video.srcObject.getTracks().forEach(track => track.stop());
             }
         });
+
+        // 초기화
+        loadModels();
     </script>
 </body>
 </html>
