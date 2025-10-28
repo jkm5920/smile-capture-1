@@ -1,143 +1,277 @@
-from IPython.display import display, HTML
-
-# 1. 스마일 캡처 앱의 전체 HTML/JavaScript 코드를 문자열로 정의합니다.
-html_code = """
-<!DOCTYPE html>
+html_code = """<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>스마일 캡처 앱 (Colab)</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-  <style>
-    body {
-      text-align: center;
-      background: #222;
-      color: #fff;
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    /* 비디오와 캔버스를 겹치기 위한 래퍼 */
-    .video-container {
-      position: relative;
-      width: 320px;
-      height: 240px;
-      border-radius: 10px;
-      overflow: hidden; /* 둥근 모서리를 위해 */
-    }
-    video, canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
-    button {
-      margin-top: 25px; /* 비디오와 간격 띄우기 */
-      padding: 10px 20px;
-      border: none;
-      border-radius: 8px;
-      background: #0b84ff;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>스마일 캡처 앱</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    body { 
+      text-align: center; 
+      background: #222; 
+      color: #fff; 
+      font-family: sans-serif; 
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    video, canvas { 
+      border: 2px solid #0b84ff;
+      border-radius: 10px; 
+      margin: 10px;
+      background: #000;
+    }
+    button { 
+      margin: 15px 10px; 
+      padding: 12px 24px; 
+      border: none; 
+      border-radius: 8px; 
+      background: #0b84ff; 
+      color: white; 
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #0066cc;
+    }
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    .status {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 5px;
+      background: #333;
+    }
+    .success { background: #2d5a2d; }
+    .error { background: #5a2d2d; }
+    .warning { background: #5a552d; }
+  </style>
 </head>
 <body>
-  <h2>스마일 캡처 앱</h2>
-  <p>웃으면 자동으로 감지돼요!</p>
-  
-    <div class="video-container">
-    <video id="video" width="320" height="240" autoplay muted playsinline></video>
-    <canvas id="overlay" width="320" height="240"></canvas>
-  </div>
-  <button id="capture">사진 저장하기</button>
+  <div class="container">
+    <h2>🎭 스마일 캡처 앱</h2>
+    <p>웃으면 자동으로 감지되어 사진을 저장할 수 있어요!</p>
+    
+    <div id="status" class="status">카메라 접근 권한을 요청 중...</div>
+    
+    <div>
+      <video id="video" width="400" height="300" autoplay muted playsinline></video>
+      <canvas id="overlay" width="400" height="300"></canvas>
+    </div>
+    
+    <div>
+      <button id="startCamera">카메라 시작</button>
+      <button id="capture" disabled>😊 사진 저장하기</button>
+    </div>
+    
+    <div id="detectionInfo" style="margin-top: 20px;"></div>
+  </div>
 
-  <script>
-    // DOM 요소 가져오기
+  <script>
     const video = document.getElementById('video');
-    const overlay = document.getElementById('overlay');
-    const context = overlay.getContext('2d');
+    const overlay = document.getElementById('overlay');
+    const context = overlay.getContext('2d');
+    const statusDiv = document.getElementById('status');
+    const detectionInfo = document.getElementById('detectionInfo');
+    const captureBtn = document.getElementById('capture');
+    const startCameraBtn = document.getElementById('startCamera');
 
-    // 1. AI 모델(가중치) 로드
-    Promise.all([
-      // 'tinyFaceDetector'는 빠르고 가벼운 얼굴 탐지 모델입니다.
-      faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
-      // 'faceExpressionNet'은 얼굴 표정을 인식하는 모델입니다.
-      faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/')
-    ]).then(startVideo); // 모델 로드가 완료되면 비디오 시작
+    let isCameraActive = false;
+    let detectionInterval;
 
-    // 2. 비디오 시작 및 카메라 권한 요청
-    function startVideo() {
-      console.log("모델 로드 완료, 카메라 시작");
-      navigator.mediaDevices.getUserMedia({ video: {} })
-        .then(stream => {
-          // 'video' 태그에 카메라 스트림을 연결
-          video.srcObject = stream;
-        })
-        .catch(err => {
-          console.error("카메라 접근 실패:", err);
-          alert("카메라 접근에 실패했습니다. 브라우저 설정을 확인해주세요.");
-        });
-    }
+    // 상태 업데이트 함수
+    function updateStatus(message, type = '') {
+      statusDiv.textContent = message;
+      statusDiv.className = `status ${type}`;
+    }
 
-    // 3. 비디오가 재생될 때 얼굴 인식 시작
-    video.addEventListener('play', () => {
-      console.log("비디오 재생 시작, 얼굴 인식 간격 설정");
-      const displaySize = { width: video.width, height: video.height };
-      // 캔버스 크기를 비디오에 맞게 설정
-      faceapi.matchDimensions(overlay, displaySize);
+    // 얼굴 인식 모델 로드
+    async function loadModels() {
+      updateStatus('AI 모델 로드 중...', 'warning');
+      try {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
+          faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
+          faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/')
+        ]);
+        updateStatus('AI 모델 로드 완료! 카메라를 시작해주세요.', 'success');
+        startCameraBtn.disabled = false;
+      } catch (error) {
+        updateStatus('모델 로드 실패: ' + error.message, 'error');
+        console.error('Model loading error:', error);
+      }
+    }
 
-      // 0.3초마다 얼굴 감지 실행
-      setInterval(async () => {
-        // 얼굴 및 표정 감지
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceExpressions();
-        
-        // 감지 결과를 캔버스 크기에 맞게 리사이즈
-        const resizedDetections = faceapi.resizeResults(detections, displaySize);
-        
-        // 캔버스를 지우고 새로 그리기
-        context.clearRect(0, 0, overlay.width, overlay.height);
-        // 감지된 얼굴에 사각형 그리기
-        faceapi.draw.drawDetections(overlay, resizedDetections);
-        // 감지된 표정(happy, sad 등) 그리기
-        faceapi.draw.drawFaceExpressions(overlay, resizedDetections);
+    // 카메라 시작 함수
+    async function startCamera() {
+      if (isCameraActive) return;
+      
+      updateStatus('카메라 접근 권한 요청 중...', 'warning');
+      
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 400 },
+            height: { ideal: 300 },
+            facingMode: 'user'
+          },
+          audio: false 
+        });
+        
+        video.srcObject = stream;
+        isCameraActive = true;
+        startCameraBtn.disabled = true;
+        captureBtn.disabled = false;
+        updateStatus('카메라 연결 성공! 얼굴을 인식 중...', 'success');
+        
+        // 얼굴 감지 시작
+        startFaceDetection();
+        
+      } catch (error) {
+        updateStatus('카메라 접근 실패: ' + error.message, 'error');
+        console.error('Camera access error:', error);
+        
+        // 코랩 환경에서의 대체 메시지
+        if (error.name === 'NotAllowedError') {
+          updateStatus('카메라 접근이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.', 'error');
+        } else if (error.name === 'NotFoundError') {
+          updateStatus('사용 가능한 카메라를 찾을 수 없습니다.', 'error');
+        }
+      }
+    }
 
-        // 행복한 표정이 0.9 (90%) 이상일 때 콘솔에 로그
-        if (resizedDetections[0] && resizedDetections[0].expressions.happy > 0.9) {
-          console.log("Smile detected! 😆");
-        }
-      }, 300); 
-    });
+    // 얼굴 감지 함수
+    function startFaceDetection() {
+      const displaySize = { width: video.width, height: video.height };
+      faceapi.matchDimensions(overlay, displaySize);
+      
+      detectionInterval = setInterval(async () => {
+        if (video.paused || video.ended) return;
+        
+        try {
+          const detections = await faceapi
+            .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceExpressions();
+          
+          context.clearRect(0, 0, overlay.width, overlay.height);
+          const resizedDetections = faceapi.resizeResults(detections, displaySize);
+          
+          // 얼굴과 표정 그리기
+          faceapi.draw.drawDetections(overlay, resizedDetections);
+          faceapi.draw.drawFaceLandmarks(overlay, resizedDetections);
+          faceapi.draw.drawFaceExpressions(overlay, resizedDetections);
+          
+          // 감지 정보 표시
+          updateDetectionInfo(detections);
+          
+          // 미소 감지
+          if (detections.length > 0) {
+            const expressions = detections[0].expressions;
+            const smileConfidence = expressions.happy;
+            
+            if (smileConfidence > 0.8) {
+              captureBtn.style.background = '#ff4444';
+              captureBtn.innerHTML = '😄 웃는 얼굴 감지됨!';
+            } else {
+              captureBtn.style.background = '#0b84ff';
+              captureBtn.innerHTML = '😊 사진 저장하기';
+            }
+          }
+          
+        } catch (error) {
+          console.error('Face detection error:', error);
+        }
+      }, 300);
+    }
 
-    // 4. 캡처 버튼 클릭 이벤트 (개선된 캡처 방식)
-    document.getElementById('capture').addEventListener('click', () => {
-      console.log("캡처 버튼 클릭됨");
-      // 1. 임시 캔버스 생성
-      const captureCanvas = document.createElement('canvas');
-      captureCanvas.width = video.width;
-      captureCanvas.height = video.height;
-      const ctx = captureCanvas.getContext('2d');
+    // 감지 정보 업데이트
+    function updateDetectionInfo(detections) {
+      if (detections.length === 0) {
+        detectionInfo.innerHTML = '<p>얼굴이 감지되지 않았습니다. 카메라 앞으로 이동해주세요.</p>';
+        return;
+      }
+      
+      const expressions = detections[0].expressions;
+      let infoHTML = '<h3>표정 분석 결과:</h3>';
+      infoHTML += '<div style="display: flex; flex-wrap: wrap; justify-content: center;">';
+      
+      Object.entries(expressions).forEach(([emotion, confidence]) => {
+        const percent = (confidence * 100).toFixed(1);
+        const emoji = {
+          'happy': '😄',
+          'sad': '😢',
+          'angry': '😠',
+          'fearful': '😨',
+          'disgusted': '🤢',
+          'surprised': '😲',
+          'neutral': '😐'
+        }[emotion] || '❓';
+        
+        infoHTML += `
+          <div style="margin: 5px; padding: 8px; background: #333; border-radius: 5px; min-width: 100px;">
+            <div>${emoji} ${emotion}</div>
+            <div>${percent}%</div>
+          </div>
+        `;
+      });
+      
+      infoHTML += '</div>';
+      detectionInfo.innerHTML = infoHTML;
+    }
 
-      // 2. 임시 캔버스에 현재 비디오 화면을 그림
-      ctx.drawImage(video, 0, 0, video.width, video.height);
-      
-      // 3. 그 위에 얼굴 인식 오버레이(상자, 표정)를 겹쳐서 그림
-      ctx.drawImage(overlay, 0, 0, overlay.width, overlay.height);
+    // 사진 캡처 함수
+    function capturePhoto() {
+      if (!isCameraActive) {
+        alert('먼저 카메라를 시작해주세요!');
+        return;
+      }
+      
+      try {
+        const link = document.createElement('a');
+        link.href = overlay.toDataURL('image/png');
+        link.download = `smile_${new Date().getTime()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        updateStatus('사진이 저장되었습니다!', 'success');
+      } catch (error) {
+        updateStatus('사진 저장 실패: ' + error.message, 'error');
+      }
+    }
 
-      // 4. 완성된 이미지를 다운로드
-      const link = document.createElement('a');
-      link.href = captureCanvas.toDataURL('image/png'); // 임시 캔버스에서 이미지 데이터 추출
-      link.download = 'smile_capture.png';
-      link.click();
-    });
-  </script>
+    // 이벤트 리스너 설정
+    startCameraBtn.addEventListener('click', startCamera);
+    captureBtn.addEventListener('click', capturePhoto);
+
+    // 페이지 로드 시 모델 로드 시작
+    window.addEventListener('load', loadModels);
+
+    // 페이지 언로드 시 정리
+    window.addEventListener('beforeunload', () => {
+      if (detectionInterval) {
+        clearInterval(detectionInterval);
+      }
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+      }
+    });
+  </script>
 </body>
-</html>
-"""
+</html>"""
 
-# 2. Colab 셀의 출력(output) 영역에 HTML 코드를 렌더링합니다.
-display(HTML(html_code))
+with open("index.html", "w", encoding="utf-8") as f:
+    f.write(html_code)
+
+print("index.html 파일 생성 완료!")
+print("코랩에서 실행할 때는 다음 단계를 따라주세요:")
+print("1. 생성된 index.html 파일을 다운로드 받으세요")
+print("2. 로컬 컴퓨터에서 HTML 파일을 열어주세요")
+print("3. 브라우저에서 카메라 접근 권한을 허용해주세요")
+print("4. '카메라 시작' 버튼을 클릭하여 얼굴 인식을 시작하세요")
