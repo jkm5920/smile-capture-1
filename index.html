@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스마일 감지 카메라 - GitHub Pages</title>
-    <!-- 최신 버전의 FaceAPI.js 사용 -->
+    <title>스마일 감지 카메라 - 실시간 접근</title>
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@latest/dist/face-api.min.js"></script>
     <style>
         * {
@@ -119,6 +118,15 @@
             background: rgba(244, 67, 54, 0.1);
         }
         
+        .permission-guide {
+            background: rgba(255, 193, 7, 0.2);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            text-align: left;
+            border-left: 4px solid #ffc107;
+        }
+        
         .expressions {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -168,14 +176,6 @@
             100% { transform: scale(1); }
         }
         
-        .fallback-message {
-            background: rgba(255, 193, 7, 0.2);
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-            border-left: 4px solid #ffc107;
-        }
-        
         @media (max-width: 768px) {
             .camera-section {
                 flex-direction: column;
@@ -201,13 +201,13 @@
         <h1>😊 스마일 감지 카메라</h1>
         <p class="subtitle">웃음을 감지하면 자동으로 하이라이트!</p>
         
-        <div class="info-box">
-            <h3>📋 사용 방법</h3>
-            <ol style="text-align: left; margin: 15px 0; padding-left: 20px;">
-                <li>"카메라 시작" 버튼을 클릭하세요</li>
-                <li>카메라 접근 권한을 허용해주세요</li>
-                <li>웃으면 자동으로 감지됩니다!</li>
-                <li>"사진 저장"으로 캡처하세요</li>
+        <div class="permission-guide">
+            <h3>🔐 실시간 카메라 접근 가이드</h3>
+            <ol style="margin: 15px 0; padding-left: 20px;">
+                <li><strong>"카메라 시작" 버튼 클릭</strong></li>
+                <li><strong>"카메라에 접근할 수 있도록 허용하시겠습니까?" → 허용 선택</strong></li>
+                <li>브라우저 주소창의 🔒 아이콘을 클릭하여 항상 허용으로 설정 가능</li>
+                <li>권한이 거부된 경우: 설정 → 개인정보 및 보안 → 사이트 설정 → 카메라 → 허용</li>
             </ol>
         </div>
         
@@ -227,15 +227,11 @@
         <div class="controls">
             <button id="startCamera">📷 카메라 시작</button>
             <button id="capture" disabled>📸 사진 저장</button>
+            <button id="stopCamera" disabled>⏹️ 카메라 정지</button>
         </div>
         
         <div class="status" id="status">
             애플리케이션 초기화 중...
-        </div>
-        
-        <div class="fallback-message" id="fallbackMessage" style="display: none;">
-            <h3>⚠️ AI 모델 로드에 문제가 발생했습니다</h3>
-            <p>기본 카메라 기능은 정상적으로 사용 가능합니다. 사진 찍기 버튼을 클릭해보세요!</p>
         </div>
         
         <div class="expressions" id="expressions">
@@ -251,15 +247,15 @@
         const statusDiv = document.getElementById('status');
         const expressionsDiv = document.getElementById('expressions');
         const smileIndicator = document.getElementById('smileIndicator');
-        const fallbackMessage = document.getElementById('fallbackMessage');
         const startCameraBtn = document.getElementById('startCamera');
         const captureBtn = document.getElementById('capture');
+        const stopCameraBtn = document.getElementById('stopCamera');
 
         // 상태 변수
         let isCameraActive = false;
         let detectionInterval;
         let modelsLoaded = false;
-        let useFallback = false;
+        let currentStream = null;
 
         // 상태 업데이트 함수
         function updateStatus(message, type = '') {
@@ -268,15 +264,38 @@
             statusDiv.className = `status ${type}`;
         }
 
-        // 모델 로드 함수 - 여러 CDN 시도
+        // 실시간 카메라 접근 권한 요청 함수
+        async function requestCameraAccess() {
+            updateStatus('📷 실시간 카메라 접근 권한 요청 중...');
+            
+            try {
+                // 카메라 접근 권한 확인
+                const permissionStatus = await navigator.permissions.query({ name: 'camera' });
+                
+                if (permissionStatus.state === 'granted') {
+                    updateStatus('✅ 카메라 접근 권한이 이미 허용되었습니다.', 'success');
+                    return true;
+                } else if (permissionStatus.state === 'prompt') {
+                    updateStatus('카메라 접근 권한을 허용해주세요...');
+                    return true;
+                } else {
+                    updateStatus('❌ 카메라 접근이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.', 'error');
+                    return false;
+                }
+            } catch (error) {
+                console.log('Permission API not supported, proceeding...');
+                return true;
+            }
+        }
+
+        // 얼굴 인식 모델 로드 (여러 CDN 시도)
         async function loadModels() {
             updateStatus('AI 얼굴 인식 모델을 로드하는 중...');
             
             const modelPaths = [
                 'https://cdn.jsdelivr.net/npm/face-api.js@latest/weights/',
                 'https://unpkg.com/face-api.js@latest/weights/',
-                '/weights/', // 상대 경로 (로컬 파일)
-                './weights/' // 현재 디렉토리의 weights 폴더
+                'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'
             ];
 
             for (const modelPath of modelPaths) {
@@ -290,7 +309,7 @@
                     ]);
                     
                     modelsLoaded = true;
-                    updateStatus('✅ 모델 로드 성공! 이제 카메라를 시작할 수 있습니다.', 'success');
+                    updateStatus('✅ AI 모델 로드 성공! 이제 카메라를 시작할 수 있습니다.', 'success');
                     startCameraBtn.disabled = false;
                     return;
                     
@@ -300,10 +319,8 @@
                 }
             }
             
-            // 모든 경로 실패 시 폴백 모드
+            // 모든 경로 실패 시
             updateStatus('⚠️ AI 모델 로드에 실패했지만 기본 카메라 기능은 사용 가능합니다', 'error');
-            fallbackMessage.style.display = 'block';
-            useFallback = true;
             startCameraBtn.disabled = false;
         }
 
@@ -311,72 +328,91 @@
         async function startCamera() {
             if (isCameraActive) return;
             
-            updateStatus('카메라 접근 권한 요청 중...');
+            // 카메라 접근 권한 확인
+            const hasPermission = await requestCameraAccess();
+            if (!hasPermission) return;
+            
+            updateStatus('노트북 카메라 연결 시도 중...');
             
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        width: { ideal: 400 },
-                        height: { ideal: 300 },
-                        facingMode: 'user'
-                    }, 
-                    audio: false 
-                });
+                // 노트북 기본 카메라 설정
+                const constraints = {
+                    video: {
+                        width: { ideal: 400, max: 1280 },
+                        height: { ideal: 300, max: 720 },
+                        facingMode: 'user', // 노트북 전면 카메라
+                        frameRate: { ideal: 30, max: 60 }
+                    },
+                    audio: false
+                };
+
+                // 실시간 스트림 요청
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                video.srcObject = stream;
+                // 비디오 요소에 스트림 연결
+                video.srcObject = currentStream;
                 isCameraActive = true;
                 
                 // 버튼 상태 업데이트
                 startCameraBtn.disabled = true;
                 startCameraBtn.textContent = '📷 카메라 실행 중';
                 captureBtn.disabled = false;
+                stopCameraBtn.disabled = false;
                 
-                updateStatus('✅ 카메라 연결 성공!', 'success');
+                updateStatus('✅ 실시간 카메라 연결 성공! 얼굴을 인식 중입니다...', 'success');
                 
-                if (modelsLoaded && !useFallback) {
-                    updateStatus('얼굴 인식 중...');
-                    startFaceDetection();
-                } else {
-                    updateStatus('기본 카메라 모드: 사진 찍기 기능 사용 가능');
-                    startBasicCamera();
-                }
+                // 비디오 로드 완료 대기
+                video.addEventListener('loadedmetadata', () => {
+                    if (modelsLoaded) {
+                        startFaceDetection();
+                    } else {
+                        startBasicPreview();
+                    }
+                });
                 
             } catch (error) {
-                console.error('카메라 오류:', error);
-                let errorMessage = '카메라 접근 실패: ';
-                
-                if (error.name === 'NotAllowedError') {
-                    errorMessage = '❌ 카메라 권한이 거부되었습니다. 브라우저 설정에서 카메라 권한을 허용해주세요.';
-                } else if (error.name === 'NotFoundError') {
-                    errorMessage = '❌ 카메라를 찾을 수 없습니다.';
-                } else {
-                    errorMessage += error.message;
-                }
-                
-                updateStatus(errorMessage, 'error');
-                startCameraBtn.disabled = false;
+                console.error('카메라 접근 오류:', error);
+                handleCameraError(error);
             }
         }
 
-        // 기본 카메라 모드 (얼굴 인식 없음)
-        function startBasicCamera() {
-            const displaySize = { width: video.width, height: video.height };
+        // 카메라 에러 처리
+        function handleCameraError(error) {
+            let errorMessage = '';
+            
+            if (error.name === 'NotAllowedError') {
+                errorMessage = '❌ 카메라 접근이 거부되었습니다.\n\n해결 방법:\n1. 브라우저 주소창의 🔒 아이콘 클릭\n2. "사이트 설정" 또는 "권한" 선택\n3. 카메라를 "허용"으로 변경\n4. 페이지 새로고침 후 다시 시도';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = '❌ 카메라를 찾을 수 없습니다. 노트북에 카메라가 있는지 확인해주세요.';
+            } else if (error.name === 'NotSupportedError') {
+                errorMessage = '❌ 이 브라우저에서 카메라를 지원하지 않습니다. Chrome, Edge, Firefox 최신 버전을 사용해주세요.';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage = '❌ 카메라가 다른 프로그램에서 사용 중입니다. 다른 카메라 앱을 모두 닫아주세요.';
+            } else {
+                errorMessage = '❌ 카메라 접근 실패: ' + error.message;
+            }
+            
+            updateStatus(errorMessage, 'error');
+            alert(errorMessage);
+            startCameraBtn.disabled = false;
+        }
+
+        // 기본 미리보기 (모델 없을 때)
+        function startBasicPreview() {
+            updateStatus('기본 카메라 모드: 사진 촬영 기능 사용 가능');
             
             detectionInterval = setInterval(() => {
                 if (video.paused || video.ended) return;
                 
-                // 기본적으로 비디오를 캔버스에 그림
                 context.clearRect(0, 0, overlay.width, overlay.height);
                 context.drawImage(video, 0, 0, overlay.width, overlay.height);
                 
-                // 기본 UI 표시
                 expressionsDiv.innerHTML = `
                     <div class="expression">
-                        <div style="font-size: 1.1em;">🎯 기본 카메라 모드</div>
-                        <div>AI 모델 로드에 실패하여 기본 기능만 사용 중입니다</div>
+                        <div style="font-size: 1.1em;">📷 기본 카메라 모드</div>
+                        <div>AI 모델 없이 기본 기능 사용 중</div>
                     </div>
                 `;
-                
             }, 100);
         }
 
@@ -425,7 +461,6 @@
             let expressionsHTML = '';
             let maxExpression = { name: '', value: 0 };
             
-            // 각 표현식에 대한 HTML 생성
             Object.entries(expressions).forEach(([emotion, confidence]) => {
                 const percent = Math.round(confidence * 100);
                 const emojis = {
@@ -444,7 +479,6 @@
                     </div>
                 `;
                 
-                // 가장 높은 표현식 찾기
                 if (confidence > maxExpression.value) {
                     maxExpression = { name: emotion, value: confidence };
                 }
@@ -453,7 +487,7 @@
             expressionsDiv.innerHTML = expressionsHTML;
             
             // 미소 감지 시 하이라이트
-            if (maxExpression.name === 'happy' && maxExpression.value > 0.7) {
+            if (maxExpression.name === 'happy' && maxExpression.value > 0.8) {
                 smileIndicator.textContent = '😄';
                 smileIndicator.classList.add('smile-active');
             } else {
@@ -462,7 +496,34 @@
             }
         }
 
-        // 사진 캡처 함수
+        // 카메라 정지
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                currentStream = null;
+                video.srcObject = null;
+                isCameraActive = false;
+                
+                if (detectionInterval) {
+                    clearInterval(detectionInterval);
+                }
+                
+                startCameraBtn.disabled = false;
+                startCameraBtn.textContent = '📷 카메라 시작';
+                captureBtn.disabled = true;
+                stopCameraBtn.disabled = true;
+                
+                updateStatus('카메라가 정지되었습니다. 다시 시작하려면 "카메라 시작"을 클릭하세요.');
+                
+                // 캔버스 초기화
+                context.clearRect(0, 0, overlay.width, overlay.height);
+                expressionsDiv.innerHTML = '';
+                smileIndicator.textContent = '😐';
+                smileIndicator.classList.remove('smile-active');
+            }
+        }
+
+        // 사진 캡처
         function capturePhoto() {
             if (!isCameraActive) {
                 alert('먼저 카메라를 시작해주세요!');
@@ -484,22 +545,29 @@
             }
         }
 
-        // 이벤트 리스너 설정
+        // 이벤트 리스너
         startCameraBtn.addEventListener('click', startCamera);
         captureBtn.addEventListener('click', capturePhoto);
+        stopCameraBtn.addEventListener('click', stopCamera);
 
         // 페이지 로드 시 모델 로드 시작
         window.addEventListener('load', loadModels);
 
-        // 페이지 종료 시 정리
+        // 페이지 종료 시 카메라 정리
         window.addEventListener('beforeunload', () => {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
             if (detectionInterval) {
                 clearInterval(detectionInterval);
             }
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-            }
         });
+
+        // 카메라 지원 여부 확인
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            updateStatus('❌ 이 브라우저는 카메라를 지원하지 않습니다. Chrome, Edge, Firefox 최신 버전을 사용해주세요.', 'error');
+            startCameraBtn.disabled = true;
+        }
     </script>
 </body>
 </html>
