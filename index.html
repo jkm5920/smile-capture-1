@@ -97,6 +97,21 @@
             backdrop-filter: blur(10px);
         }
         
+        .error {
+            background: rgba(255, 87, 87, 0.2);
+            border: 1px solid rgba(255, 87, 87, 0.5);
+        }
+        
+        .success {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.5);
+        }
+        
+        .warning {
+            background: rgba(255, 193, 7, 0.2);
+            border: 1px solid rgba(255, 193, 7, 0.5);
+        }
+        
         .expressions {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -172,8 +187,8 @@
             <button id="capture" disabled>📸 사진 저장</button>
         </div>
         
-        <div class="status" id="status">
-            카메라 준비 중...
+        <div class="status warning" id="status">
+            애플리케이션 초기화 중...
         </div>
         
         <div class="expressions" id="expressions">
@@ -200,32 +215,63 @@
         let modelsLoaded = false;
 
         // 상태 업데이트 함수
-        function updateStatus(message, isError = false) {
+        function updateStatus(message, type = '') {
+            console.log(`Status: ${message}`);
             statusDiv.textContent = message;
-            statusDiv.style.background = isError ? 
-                'rgba(255, 87, 87, 0.2)' : 'rgba(76, 175, 80, 0.2)';
-            console.log(message);
+            statusDiv.className = `status ${type}`;
         }
 
-        // 모델 로드 함수
+        // 얼굴 인식 모델 로드
         async function loadModels() {
-            updateStatus('AI 모델을 로드하는 중...');
+            updateStatus('AI 얼굴 인식 모델을 로드하는 중...', 'warning');
             
             try {
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
-                    faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
-                    faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/'),
-                    faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/')
-                ]);
-                
+                // FaceAPI 사용 가능 여부 확인
+                if (typeof faceapi === 'undefined') {
+                    throw new Error('FaceAPI.js를 로드할 수 없습니다. 인터넷 연결을 확인해주세요.');
+                }
+
+                // 여러 CDN 시도 (fallback)
+                const weightsBasePaths = [
+                    'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights/',
+                    'https://unpkg.com/face-api.js@0.22.2/weights/'
+                ];
+
+                let modelsLoaded = false;
+                let lastError = null;
+
+                for (const basePath of weightsBasePaths) {
+                    try {
+                        updateStatus(`모델 로드 시도: ${basePath}`, 'warning');
+                        
+                        await Promise.all([
+                            faceapi.nets.tinyFaceDetector.loadFromUri(basePath),
+                            faceapi.nets.faceLandmark68Net.loadFromUri(basePath),
+                            faceapi.nets.faceRecognitionNet.loadFromUri(basePath),
+                            faceapi.nets.faceExpressionNet.loadFromUri(basePath)
+                        ]);
+                        
+                        modelsLoaded = true;
+                        break;
+                        
+                    } catch (error) {
+                        lastError = error;
+                        console.warn(`CDN 실패: ${basePath}`, error);
+                        continue;
+                    }
+                }
+
+                if (!modelsLoaded) {
+                    throw lastError || new Error('모든 CDN에서 모델을 로드하지 못했습니다.');
+                }
+
                 modelsLoaded = true;
-                updateStatus('모델 로드 완료! 카메라를 시작해주세요.');
+                updateStatus('모델 로드 완료! 카메라를 시작해주세요.', 'success');
                 startCameraBtn.disabled = false;
                 
             } catch (error) {
                 console.error('모델 로드 오류:', error);
-                updateStatus('모델 로드 실패. 페이지를 새로고침 해주세요.', true);
+                updateStatus(`모델 로드 실패: ${error.message}. 페이지를 새로고침 해주세요.`, 'error');
             }
         }
 
@@ -233,7 +279,7 @@
         async function startCamera() {
             if (isCameraActive || !modelsLoaded) return;
             
-            updateStatus('카메라 접근 권한 요청 중...');
+            updateStatus('카메라 접근 권한 요청 중...', 'warning');
             
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -250,7 +296,7 @@
                 startCameraBtn.disabled = true;
                 captureBtn.disabled = false;
                 
-                updateStatus('카메라 연결 성공! 얼굴을 인식 중...');
+                updateStatus('카메라 연결 성공! 얼굴을 인식 중...', 'success');
                 
                 // 얼굴 감지 시작
                 startFaceDetection();
@@ -267,7 +313,7 @@
                     errorMessage += error.message;
                 }
                 
-                updateStatus(errorMessage, true);
+                updateStatus(errorMessage, 'error');
             }
         }
 
@@ -366,11 +412,11 @@
                 link.href = overlay.toDataURL('image/png');
                 link.click();
                 
-                updateStatus('사진이 저장되었습니다! 😊');
+                updateStatus('사진이 저장되었습니다! 😊', 'success');
                 
             } catch (error) {
                 console.error('사진 저장 오류:', error);
-                updateStatus('사진 저장에 실패했습니다.', true);
+                updateStatus('사진 저장에 실패했습니다.', 'error');
             }
         }
 
@@ -390,9 +436,6 @@
                 video.srcObject.getTracks().forEach(track => track.stop());
             }
         });
-
-        // 초기화
-        loadModels();
     </script>
 </body>
 </html>
